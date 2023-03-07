@@ -1,0 +1,3 @@
+[submodule "src/BattSim"]
+	path = src/BattSim
+	url = git@github.com:colefuerth/BattSim.git
