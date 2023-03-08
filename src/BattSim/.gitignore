@@ -1,0 +1,4 @@
+*.prj
+__pycache__
+octave-workspace
+currentDemo.py
