@@ -40,7 +40,7 @@ def build_battery(i, kpi):
     C_rates_discharge = np.concatenate(
         [C_rates_discharge, np.array([1/16, 1/4, 1/2, 1, 2])])
     # partials of SoC to sample
-    partial_state_of_charge = np.array([1, 0.5, 0.25, 0.1])
+    partial_state_of_charge = np.array([1, 0.8, 0.65])
     # resolution to scale to (samples per second)
     resolution_arr = np.array([1, 1/5, 1/10, 1/20])
 
@@ -86,7 +86,7 @@ def build_battery(i, kpi):
             print(f'Error: {e}')
             exit(-1)
 
-        ds['i'].append(i+1)
+        ds['i'].append(i + 1)
         ds['Kp'].append(kpi)
         ds['C'].append(capacity)
         ds['soc'].append(soc)
