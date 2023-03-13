@@ -36,7 +36,7 @@ if not os.path.exists('./res/K_para_ordered.csv'):
     kp.to_csv('./res/K_para_ordered.csv')
 
 t, _ = time(), print("Building dataset...")
-df = build_dataset(f='./res/K_para_ordered', cache=f'./res/dataset_{ps()}.pkl')
+df = build_dataset(f='./res/K_para_ordered.csv', cache=f'./res/dataset_{ps()}.pkl')
 df = df.sample(frac=1).reset_index(drop=True)
 print(f"Done. Took {time()-t:.2f}s.")
 kp = import_k_para(f'./res/K_para_ordered.csv')
