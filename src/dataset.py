@@ -9,9 +9,9 @@ import os
 import sys
 from platform import system as ps
 
-if ps() == 'Windows':
-    print('Windows does NOT get along with this library. Please use Linux.', file=sys.stderr)
-    exit(1)
+# if ps() == 'Windows':
+#     print('Windows does NOT get along with this library. Please use Linux.', file=sys.stderr)
+#     exit(1)
 
 # %%
 
@@ -36,13 +36,13 @@ def import_k_para(f: str) -> list:
 def build_battery(i, kpi):
 
     # charge/discharge rates
-    C_rates_discharge = np.array([1/16, 1/4, 1/2, 1, 2, 4, 16]) * -1
+    C_rates_discharge = np.array([1/16, 1/4, 1/2, 1, 2, 4]) * -1
     C_rates_discharge = np.concatenate(
-        [C_rates_discharge, np.array([1/16, 1/4, 1/2, 1, 4])])
+        [C_rates_discharge, np.array([1/16, 1/4, 1/2, 1, 2])])
     # partials of SoC to sample
     partial_state_of_charge = np.array([1, 0.5, 0.25, 0.1])
-    # resolution to scale to
-    resolution_arr = np.array([2, 4, 8, 20]) * 100
+    # resolution to scale to (samples per second)
+    resolution_arr = np.array([1, 1/5, 1/10, 1/20])
 
     # do a cross product between C_rates, state of charge slice size, and resolution
     # place slices' centers on a multimodal distribution, with the peaks on 0.2 and 0.75 soc
@@ -73,11 +73,18 @@ def build_battery(i, kpi):
         if C_rate < 0:
             soc += slice_size
 
-        npoints = int(resolution * slice_size)
-        t = np.linspace(0, 3600 * slice_size, npoints)
-        I = np.ones(npoints) * C_rate * capacity
-        V, I, soc, ocv = BattSim(
-            kpi[:-1], capacity, kpi[-1], R1, C1, R2, C2, ModelID, soc=soc).simulate(I, t)
+        try:
+            npoints = int(3600 * (1/abs(C_rate)) * slice_size * resolution)
+            t = np.linspace(0, npoints, npoints, endpoint=False)
+            I = np.ones(npoints) * C_rate * capacity
+            V, I, soc, ocv = BattSim(
+                kpi[:-1], capacity, kpi[-1], R1, C1, R2, C2, ModelID, soc=soc).simulate(I, t)
+
+        except Exception as e:
+            print(
+                f'Generating {npoints} samples for K{i+1} at C_rate={C_rate}, slice_size={slice_size}, resolution={resolution}...')
+            print(f'Error: {e}')
+            exit(-1)
 
         ds['i'].append(i+1)
         ds['Kp'].append(kpi)
@@ -116,19 +123,13 @@ def build_dataset(f: str = 'res/K_para.csv', cache: str = None):
     df = pd.DataFrame()
     # the columns are: ['V':np, 'I', 't', 'kp', 'ki', 'SoC', 'C']
     kp = import_k_para(f)
-    print(kp.shape)
 
     # Some perlin noise will also be added later for current vectors that are generated incrementally, but for now, just use a constant value
     import multiprocessing as mp
-    # mp.freeze_support()
     from tqdm import tqdm as pb
 
-    with mp.Pool() as pool:
-        # for each k-parameter instance in the dataset
-        threads = [pool.apply_async(build_battery, args=(i, kpi,))
-                   for i, kpi in enumerate(kp)]
-        for ds in pb(threads):
-            df = pd.concat([df, pd.DataFrame(ds.get())], ignore_index=True)
+    for i, kpi in pb(enumerate(kp), total=len(kp), desc='Generating dataset', unit='kpi'):
+        df = pd.concat([df, pd.DataFrame(build_battery(i, kpi))], ignore_index=True)
 
     if cache is not None:
         df.to_pickle(cache)

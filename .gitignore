@@ -132,3 +132,4 @@ dmypy.json
 *.pkl
 *.npy
 dataset.csv
+*.h5
