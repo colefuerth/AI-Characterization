@@ -4,5 +4,5 @@ pandas
 matplotlib
 tqdm
 # cupy-cuda12x
-# scikit-learn
-opensimplex
+scikit-learn
+noise

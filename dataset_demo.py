@@ -8,6 +8,7 @@ from time import time
 from tqdm import tqdm
 from functools import cache
 from platform import system as ps
+from sklearn.metrics import accuracy_score
 from src.zsoc import OCV_curve
 from src.dataset import build_dataset, import_k_para
 
@@ -36,7 +37,8 @@ if not os.path.exists('./res/K_para_ordered.csv'):
     kp.to_csv('./res/K_para_ordered.csv')
 
 t, _ = time(), print("Building dataset...")
-df = build_dataset(f='./res/K_para_ordered.csv', cache=f'./res/dataset_{ps()}.pkl')
+df = build_dataset(f='./res/K_para_ordered.csv',
+                   cache=f'./res/dataset_{ps()}.pkl')
 df = df.sample(frac=1).reset_index(drop=True)
 print(f"Done. Took {time()-t:.2f}s.")
 kp = import_k_para(f'./res/K_para_ordered.csv')
@@ -49,6 +51,9 @@ print(f"Done. Took {time()-t:.2f}s.")
 
 # %% define the model
 
+# split into test and train
+X_train, X_test = df.iloc[:int(len(df)*0.8)], df.iloc[int(len(df)*0.8):]
+y_train, y_test = X_train.i - 1, X_test.i - 1
 
 # class mse_custom(tf.keras.losses.MeanSquaredError):
 #     def __init__(self, name='mse_custom'):
@@ -66,7 +71,9 @@ print(f"Done. Took {time()-t:.2f}s.")
 
 # do a simple 3d histogram of the data using numpy
 shape = (20, 10, 50)
-def hist3dgenerator():
+
+
+def hist3dgenerator(df):
     for i, row in enumerate(df.itertuples()):
         V, I, t = row.V, row.I, row.t
         h = np.histogramdd(
@@ -79,15 +86,9 @@ def hist3dgenerator():
         yield h
 
 
-# use tqdm
-print("Generating 3d histograms...")
-t = time()
-cache = f'./res/hist_{ps()}.npy'
-if os.path.exists(cache) and False:
-    hist = np.load(cache)
-else:
-    hist = np.array([h for h in tqdm(hist3dgenerator(), total=len(df))])
-    np.save(cache, hist)
+t, _ = time(), print("Generating 3d histograms...")
+X_train = np.array([h for h in tqdm(hist3dgenerator(X_train), total=len(df))])
+X_test = np.array([h for h in tqdm(hist3dgenerator(X_test), total=len(df))])
 print(f"Done. Took {time()-t:.2f}s.")
 
 
@@ -98,7 +99,8 @@ def CNN_char(df: pd.DataFrame):
 
     t, _ = time(), print("Building model CNN_char...")
     model = keras.Sequential()
-    model.add(keras.layers.Conv3D(32, (3, 3, 3), activation='relu', input_shape=(*shape, 1)))
+    model.add(keras.layers.Conv3D(32, (3, 3, 3),
+              activation='relu', input_shape=(*shape, 1)))
     model.add(keras.layers.MaxPool3D((2, 2, 2)))
     model.add(keras.layers.Conv3D(32, (3, 3, 3), activation='relu'))
     model.add(keras.layers.MaxPool3D((2, 2, 2)))
@@ -115,9 +117,9 @@ def CNN_char(df: pd.DataFrame):
 
     print(f"Done. Took {time()-t:.2f}s.")
 
-    y = np.eye(nsamples)[df.i - 1]
+    y = np.eye(nsamples)[y_train - 1]
 
-    model.fit(hist, y, epochs=10, batch_size=16)
+    model.fit(X_train, y, epochs=20, batch_size=1)
 
     return model
 
@@ -127,7 +129,8 @@ def CNN_extrapolate(df: pd.DataFrame):
 
     t, _ = time(), print("Building model CNN_extrapolate...")
     model = keras.Sequential()
-    model.add(keras.layers.Conv3D(32, (3, 3, 3), activation='relu', input_shape=(*shape, 1)))
+    model.add(keras.layers.Conv3D(32, (3, 3, 3),
+              activation='relu', input_shape=(*shape, 1)))
     model.add(keras.layers.MaxPool3D((2, 2, 2)))
     model.add(keras.layers.Conv3D(32, (3, 3, 3), activation='relu'))
     model.add(keras.layers.MaxPool3D((2, 2, 2)))
@@ -144,20 +147,22 @@ def CNN_extrapolate(df: pd.DataFrame):
 
     print(f"Done. Took {time()-t:.2f}s.")
 
-    y = np.array([zsoc[row.i - 1] for row in df.itertuples()])
+    y = zsoc[y_train - 1]
 
-    model.fit(hist, y, epochs=10, batch_size=16)
+    model.fit(X_train, y, epochs=20, batch_size=1)
 
     return model
 
 # %% lstm
+
 
 def LSTM_categorical(df: pd.DataFrame):
     """do a dummy tf.keras model that just takes the raw v, i, t vectors and predicts the i"""
 
     t, _ = time(), print("Building model LSTM_categorical...")
     model = keras.Sequential()
-    model.add(keras.layers.Reshape((shape[0]*shape[1], shape[2]), input_shape=(*shape, 1)))
+    model.add(keras.layers.Reshape(
+        (shape[0]*shape[1], shape[2]), input_shape=(*shape, 1)))
     model.add(keras.layers.LSTM(128))
     model.add(keras.layers.Dense(nsamples, activation='softmax'))
     model.summary()
@@ -170,9 +175,9 @@ def LSTM_categorical(df: pd.DataFrame):
 
     print(f"Done. Took {time()-t:.2f}s.")
 
-    y = np.eye(nsamples)[df.i - 1]
+    y = np.eye(nsamples)[y_train - 1]
 
-    model.fit(hist, y, epochs=10, batch_size=16)
+    model.fit(X_train, y, epochs=20, batch_size=1)
 
     return model
 
@@ -189,4 +194,8 @@ for name, model in models:
     m = model(df)
     m.save(f'./res/{name}_{ps()}.h5')
 
-# %%
+for name, model in models:
+    m = keras.models.load_model(f'./res/{name}_{ps()}.h5')
+    y_pred = m.predict(X_test)
+    y_pred = np.argmax(y_pred, axis=-1) + 1
+    print(name, accuracy_score(y_test, y_pred))
