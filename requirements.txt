@@ -5,3 +5,4 @@ matplotlib
 tqdm
 # cupy-cuda12x
 # scikit-learn
+opensimplex
