@@ -100,6 +100,7 @@ def CNN_char(df: pd.DataFrame):
     model = keras.Sequential()
     model.add(keras.layers.Conv3D(32, (3, 3, 3), activation='relu', input_shape=(*shape, 1)))
     model.add(keras.layers.MaxPool3D((2, 2, 2)))
+    model.add(keras.layers.Dense(128, activation='relu'))
     model.add(keras.layers.Conv3D(32, (3, 3, 3), activation='relu'))
     model.add(keras.layers.MaxPool3D((2, 2, 2)))
     model.add(keras.layers.Flatten())
@@ -122,43 +123,19 @@ def CNN_char(df: pd.DataFrame):
     return model
 
 
-def CNN_extrapolate(df: pd.DataFrame):
+def CNN_flatten2d(df: pd.DataFrame):
     """do a dummy tf.keras model that just takes the raw v, i, t vectors and predicts the i"""
 
-    t, _ = time(), print("Building model CNN_extrapolate...")
+    from src.layers import Flatten2D
+
+    t, _ = time(), print("Building model CNN_char...")
     model = keras.Sequential()
-    model.add(keras.layers.Conv3D(32, (3, 3, 3), activation='relu', input_shape=(*shape, 1)))
-    model.add(keras.layers.MaxPool3D((2, 2, 2)))
-    model.add(keras.layers.Conv3D(32, (3, 3, 3), activation='relu'))
-    model.add(keras.layers.MaxPool3D((2, 2, 2)))
+    model.add(keras.layers.Input(shape=(*shape, 1)))
+    model.add(Flatten2D())
+    model.add(keras.layers.Conv3D(32, (2, 2, 2), activation='relu'))
+    model.add(keras.layers.MaxPool3D((3, 3, 3)))
     model.add(keras.layers.Flatten())
     model.add(keras.layers.Dense(128, activation='relu'))
-    model.add(keras.layers.Dense(len(zsoc[0]), activation='softmax'))
-    model.summary()
-
-    model.compile(
-        optimizer='adam',
-        loss='mean_squared_error',
-        metrics=['mean_squared_error']
-    )
-
-    print(f"Done. Took {time()-t:.2f}s.")
-
-    y = np.array([zsoc[row.i - 1] for row in df.itertuples()])
-
-    model.fit(hist, y, epochs=10, batch_size=16)
-
-    return model
-
-# %% lstm
-
-def LSTM_categorical(df: pd.DataFrame):
-    """do a dummy tf.keras model that just takes the raw v, i, t vectors and predicts the i"""
-
-    t, _ = time(), print("Building model LSTM_categorical...")
-    model = keras.Sequential()
-    model.add(keras.layers.Reshape((shape[0]*shape[1], shape[2]), input_shape=(*shape, 1)))
-    model.add(keras.layers.LSTM(128))
     model.add(keras.layers.Dense(nsamples, activation='softmax'))
     model.summary()
 
@@ -176,13 +153,44 @@ def LSTM_categorical(df: pd.DataFrame):
 
     return model
 
+
+
+def CNN_flatten1d(df: pd.DataFrame):
+    """do a dummy tf.keras model that just takes the raw v, i, t vectors and predicts the i"""
+
+    from src.layers import Flatten2D
+
+    t, _ = time(), print("Building model CNN_char...")
+    model = keras.Sequential()
+    model.add(keras.layers.Input(shape=(*shape, 1)))
+    model.add(Flatten1D())
+    model.add(keras.layers.Conv3D(32, (2, 2, 2), activation='relu'))
+    model.add(keras.layers.MaxPool3D((3, 3, 3)))
+    model.add(keras.layers.Flatten())
+    model.add(keras.layers.Dense(128, activation='relu'))
+    model.add(keras.layers.Dense(nsamples, activation='softmax'))
+    model.summary()
+
+    model.compile(
+        optimizer='adam',
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
+    print(f"Done. Took {time()-t:.2f}s.")
+
+    y = np.eye(nsamples)[df.i - 1]
+
+    model.fit(hist, y, epochs=10, batch_size=16)
+
+    return model
 
 # %% train the model
 
 models = [
-    ('CNN_categorical', CNN_char),
-    ('CNN_extrapolate', CNN_extrapolate),
-    ('LSTM_categorical', LSTM_categorical)
+    ('base_encoding', CNN_char),
+    ('flatten2d_encoding', CNN_flatten2d),
+    ('flatten1d_encoding', CNN_flatten1d),
 ]
 
 for name, model in models:
