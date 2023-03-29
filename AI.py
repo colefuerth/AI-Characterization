@@ -65,7 +65,7 @@ print(f"Done. Took {time()-t:.2f}s.")
 # %% generate 3d histograms (preprocessing )
 
 # do a simple 3d histogram of the data using numpy
-shape = (20, 10, 50)
+shape = (8, 8, 8)
 def hist3dgenerator():
     for i, row in enumerate(df.itertuples()):
         V, I, t = row.V, row.I, row.t
@@ -158,12 +158,12 @@ def CNN_flatten2d(df: pd.DataFrame):
 def CNN_flatten1d(df: pd.DataFrame):
     """do a dummy tf.keras model that just takes the raw v, i, t vectors and predicts the i"""
 
-    from src.layers import Flatten2D
+    from src.layers import FlattenHistogram1D
 
     t, _ = time(), print("Building model CNN_char...")
     model = keras.Sequential()
     model.add(keras.layers.Input(shape=(*shape, 1)))
-    model.add(Flatten1D())
+    model.add(FlattenHistogram1D())
     model.add(keras.layers.Conv3D(32, (2, 2, 2), activation='relu'))
     model.add(keras.layers.MaxPool3D((3, 3, 3)))
     model.add(keras.layers.Flatten())
@@ -193,8 +193,12 @@ models = [
     ('flatten1d_encoding', CNN_flatten1d),
 ]
 
-for name, model in models:
-    m = model(df)
-    m.save(f'./res/{name}_{ps()}.h5')
+# for name, model in models:
+#     m = model(df)
+#     m.save(f'./res/{name}_{ps()}.h5')
+m = CNN_flatten1d(df)
+# evaluate model
+y = np.eye(nsamples)[df.i - 1]
+print(m.evaluate(hist, y))
 
 # %%
